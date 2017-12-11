@@ -1,7 +1,7 @@
 ---
-title: "CPRAR"
+title: "AR algorithm on the Ising model"
 author: "Adam Stapelman"
-date: "December 10, 2017"
+date: "September 28, 2017"
 output: pdf_document
 ---
 
@@ -11,20 +11,224 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+Impelementation of the AR algorithm on the Ising Model
+```{r}
 
-```{r cars}
-summary(cars)
+time_begin <- as.numeric(Sys.time())*1000
+
+grid_size <- 5
+beta <- .1
+
+accept <-FALSE
+
+while (!accept) {
+    
+  m <- matrix(as.integer(runif(grid_size*grid_size, min=0, max=1) + .5), nrow=grid_size, ncol=grid_size)
+  
+  num_equal  <- 0
+  num_diff   <- 0
+  
+  for (i in 1:grid_size) {
+    for (j in 1:grid_size) {
+      
+      if(i < (grid_size)) {
+        
+        if(m[i,j] == m[i+1,j]){
+          num_equal <- num_equal + 1
+        } else {
+          num_diff  <- num_diff + 1
+        }
+        
+      }
+      
+      if(j < (grid_size)) {
+        
+        if(m[i,j] == m[i,j+1]) {
+          num_equal <- num_equal + 1
+        } else {
+          num_diff <- num_diff + 1
+        }
+      }
+    }
+  }
+  
+  num_equal
+  num_diff
+  
+  accept <- TRUE
+  
+  for (i in 1:num_diff) {
+    
+    s <- runif(1, min = 0, max = 1)
+    if (s >= exp(-beta)){
+      accept <- FALSE
+    }
+    
+  }
+  
+}
+
+time_end <- as.numeric(Sys.time())*1000
+(time_end - time_begin)/1000
+
+
 ```
 
-## Including Plots
 
-You can also embed plots, for example:
+The same implementation of the AR algorithm on the Ising Model, but with a graph package this time.
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r}
+
+library(igraph)
+library(binom)
+
+num_trials <- 100
+num_diff_vec <- c()
+
+time_begin <- as.numeric(Sys.time())*1000
+
+for(t in 1:num_trials) {
+grid_size <- 5 
+beta <- .05
+
+g <- make_lattice(length = grid_size, dim = 2, directed = FALSE)
+
+accept <- FALSE
+
+while(!accept){
+  
+  V(g)$weight <- rbinom(n = vcount(g), size = 1, prob=0.5)
+
+  E(g)$weight <- runif(ecount(g), min = 0, max = 1)
+  edge_weights <- get.adjacency(g, attr="weight")
+  
+  num_diff <- 0
+
+  accept <- TRUE
+  for (v in V(g)){
+    vertex_attr(g, "visited", index = v) <- FALSE
+  }
+  
+  vertex.attributes(g, index = v)
+
+  for(v in V(g)) {
+
+    for (neighbor in neighbors(g, v)){
+
+      if (!vertex_attr(g, "visited", index = neighbor)){
+        if (vertex_attr(g, "weight", index = v) != vertex_attr(g, "weight", index = neighbor)) {
+          if (edge_weights[v, neighbor] <= exp(-beta)) {
+            
+             num_diff <- num_diff + 1
+            
+          } else{
+              accept <- FALSE
+          }
+        }
+      }
+
+    }
+
+    vertex_attr(g, "visited", index = v) <- TRUE
+  }
+  
+}
+
+num_diff_vec <- c(num_diff_vec, num_diff)
+
+}
+
+time_end <- as.numeric(Sys.time())*1000
+((time_end - time_begin)/1000) / num_trials
+
+hist_title <- paste("Beta = ", toString(beta), ", n_edges = ", toString(length(E(g))), sep = "")
+
+hist(num_diff_vec, xlab = "Num different edges", ylab = "Frequency", main = hist_title)
+
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+Implementation of the AR algorithm on the Random Cluster Model
+
+```{r}
+
+library(igraph)
+library(binom)
+
+num_diff_vec <- c()
+num_trials <- 100
+
+time_begin <- as.numeric(Sys.time())*1000
+
+for(t in 1:num_trials) {
+
+  grid_size <- 4
+  beta      <- .1 
+  p         <- 1 - exp(-beta)
+
+  g <- make_lattice(length = grid_size, dim = 2, directed = FALSE)
+
+  accept <- FALSE
+
+  while(!accept){
+
+    num_diff <- 0
+
+    E(g)$weight <- rbinom(ecount(g), size = 1, prob = p)
+    V(g)$weight <- rbinom(n = vcount(g), size = 1, prob=0.5)
+  
+    edge_weights <- get.adjacency(g, attr="weight")
+  
+    accept <- TRUE
+    for (v in V(g)){
+      vertex_attr(g, "visited", index = v) <- FALSE
+    }
+  
+    vertex.attributes(g, index = v)
+
+    for(v in V(g)) {
+      
+      for (neighbor in neighbors(g, v)){
+        
+        if (!vertex_attr(g, "visited", index = neighbor)){
+          if (vertex_attr(g, "weight", index = v) != vertex_attr(g, "weight", index = neighbor)){
+            if (edge_weights[v, neighbor] == 1) {
+              accept <- FALSE
+            } else {
+              num_diff <- num_diff + 1
+            }
+          } 
+        }
+      }
+  
+      vertex_attr(g, "visited", index = v) <- TRUE
+
+    }
+
+  }
+
+  num_diff_vec <- c(num_diff_vec, num_diff)
+
+}
+
+time_end <- as.numeric(Sys.time())*1000
+((time_end - time_begin)/1000) / num_trials
+
+hist_title <- paste("Beta = ", toString(beta), ", n_edges = ", toString(length(E(g))), sep = "")
+
+hist(num_diff_vec, xlab = "Num different edges", ylab = "Frequency", main = hist_title)
+
+
+```
+
+CPRAR algorithm on the Ising model
+
+```{r}
+
+
+
+
+```
+
+
+
